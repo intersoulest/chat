@@ -6,7 +6,7 @@ public:
     void Start();
 private:
     void CheckDeadline();
-    void WritrResponse();
+    void WriteResponse();
     void HandleReq();
 
     tcp::socket _socket;

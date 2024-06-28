@@ -10,11 +10,13 @@ void CServer::Start(){
         try
         {   //出错则放弃这个连接，继续监听新链接
             if(ec){
+            std::cout << "accepter is " << std::endl;
             self->Start();
             return;
         }
          //处理新链接，创建HpptConnection类管理新连接
             std::make_shared<HttpConnection>(std::move(self->_socket))->Start();
+            std::cout << "newacceptor is " << std::endl;
             //继续监听
             self->Start();
         }

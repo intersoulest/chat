@@ -1,5 +1,6 @@
 #include "HttpConnection.h"
-
+#include "LogicSystem.h"
+#include <iostream>
 HttpConnection::HttpConnection(tcp::socket socket)
     :_socket(std::move(socket)){  
     }
@@ -32,17 +33,48 @@ void HttpConnection::Start(){
 
     });
 }
-void HttpConnection::HandleReq(){
+void HttpConnection::HandleReq() {
     //设置版本
     _response.version(_request.version());
     //设置为短链接
     _response.keep_alive(false);
-    if(_request.method() == http::verb::get){
-        bool success = LogicSystem::Getinstance()->HandleGet(_request.target(),shared_from_this());
-        if(!success){
+    if (_request.method() == http::verb::get) {
+        bool success = LogicSystem::GetInstance()->HandleGet(_request.target().to_string(), shared_from_this());
+        if (!success) {
             _response.result(http::status::not_found);
-            _response.set(http::field::content_type,"text/plain");
-            beast::ostream(_res)
+            _response.set(http::field::content_type, "text/plain");
+            beast::ostream(_response.body()) << "url not found\r\n";
+            WriteResponse();
+            return;
         }
+        _response.result(http::status::ok);
+        _response.set(http::field::server, "GateServer");
+        WriteResponse();
+        return;
     }
+}
+//因为http是短链接，所以发送完数据后不需要再监听对方链接，直接断开发送端即可。
+void HttpConnection::WriteResponse() {
+    auto self = shared_from_this();
+    _response.content_length(_response.body().size());
+    http::async_write(
+        _socket,
+        _response,
+        [self](beast::error_code ec, std::size_t)
+        {
+            self->_socket.shutdown(tcp::socket::shutdown_send, ec);//关闭发送端
+            self->deadline_.cancel();
+        });
+}
+void HttpConnection::CheckDeadline() {
+    auto self = shared_from_this();
+    deadline_.async_wait(
+        [self](beast::error_code ec)
+        {
+            if (!ec)
+            {
+                // Close socket to cancel any outstanding operation.
+                self->_socket.close(ec);
+            }
+        });
 }
